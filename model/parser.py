@@ -77,7 +77,7 @@ class CianParserWrapper:
         self.driver.get(url)
         time.sleep(uniform(7, 9))
         data = {'url': url}
-        wait = WebDriverWait(self.driver, 15)
+        wait = WebDriverWait(self.driver, 25)
         try:
             self.driver.execute_script("window.scrollTo(0, 750);")
             time.sleep(2)
