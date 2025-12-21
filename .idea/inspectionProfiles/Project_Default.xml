@@ -1,0 +1,62 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="false" level="WARNING" enabled_by_default="false">
+      <option name="ignoredPackages">
+        <list>
+          <option value="aioschedule" />
+          <option value="appdirs" />
+          <option value="cssselect" />
+          <option value="fake-useragent" />
+          <option value="frozendict" />
+          <option value="html5lib" />
+          <option value="importlib-metadata" />
+          <option value="intrinio-sdk" />
+          <option value="lxml" />
+          <option value="multitasking" />
+          <option value="outcome" />
+          <option value="parse" />
+          <option value="peewee" />
+          <option value="pyee" />
+          <option value="pyppeteer" />
+          <option value="pyquery" />
+          <option value="PySocks" />
+          <option value="pyTelegramBotAPI" />
+          <option value="requests-html" />
+          <option value="retrying" />
+          <option value="selenium" />
+          <option value="sortedcontainers" />
+          <option value="tenacity" />
+          <option value="tqdm" />
+          <option value="trio" />
+          <option value="trio-websocket" />
+          <option value="w3lib" />
+          <option value="wsproto" />
+          <option value="yfinance" />
+          <option value="zipp" />
+        </list>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="VulnerableLibrariesLocal" enabled="false" level="WARNING" enabled_by_default="false">
+      <option name="isIgnoringEnabled" value="true" />
+      <option name="ignoredModules">
+        <list>
+          <option value="Outside_Ai" />
+          <option value="Outside_Ai" />
+        </list>
+      </option>
+      <option name="ignoredPackages">
+        <list>
+          <option value="null:zipp:3.17.0" />
+          <option value="null:tqdm:4.66.1" />
+        </list>
+      </option>
+      <option name="ignoredReasons">
+        <list>
+          <option value="Not exploitable" />
+          <option value="Fixed in branch" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
