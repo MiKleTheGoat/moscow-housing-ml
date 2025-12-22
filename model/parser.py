@@ -8,164 +8,218 @@ import pandas as pd
 import time
 from random import uniform
 
-house_type_map = {
-    "Монолитный": 3,
-    "Панельный": 2,
-    "Кирпичный": 3,
-    "Блочный": 1,
-    "Деревянный": 0
-}
+house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3, "Блочный": 1, "Деревянный": 0,
+                  "Кирпично-монолитный": 3}
 renov_map = {"Дизайнерский": 3, "Евроремонт": 2, "Косметический": 1, "Без ремонта": 0}
 class_map = {"Премиум": 4, "Бизнес": 3, "Комфорт": 2, "Типовой": 1}
 parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1, "Нет": 0}
-finish_map = {
-    "Без отделки": 0,
-    "Черновая": 0,
-    "Предчистовая": 1,
-    "White box": 1,
-    "Чистовая": 2,
-    "С отделкой": 2,
-    "Под ключ": 2
-}
+finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1, "White box": 1, "Чистовая": 2, "С отделкой": 2,
+              "Под ключ": 2}
 
-# Название на ЦИАН : Имя колонки в таблице
-features_to_find = {
-    "Тип дома": "house_type",
-    "Парковка": "parking",
-    "Отделка": "finish",
-    "Класс": "jk_class"
-}
-url_main = 'https://www.cian.ru/kupit-kvartiru-moskva-metro-strogino/'
+CIAN_STROGINO_APARTMENTS_URL = 'https://www.cian.ru/kupit-kvartiru-moskva-metro-strogino/'
 
-# Основной класс для парсинга ЦИАН
+
 class CianParserWrapper:
     def __init__(self, base_url):
         self.base_url = base_url
         self.base_name = 'house_cian.csv'
+        self.driver = None
 
-    # Инициализация драйвера Safari
-    def ScrapSafari(self):
+    def scrape_safari(self):
+        print("Запуск Safari...")
         options = SafariOptions()
-        user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-        options.set_capability("browserName", "safari")
         self.driver = webdriver.Safari(options=options)
         self.driver.maximize_window()
-    # Получение всех ссылок на жилье с главной страницы
+
     def get_links(self):
+        print(f"Заходим на главную страницу: {self.base_url}")
         self.driver.get(self.base_url)
-        time.sleep(uniform(5, 7))
-        #Сначала обрабатываем враппер офферов где все карточки
-        offer_wrapper = self.driver.find_element(By.CSS_SELECTOR, '[data-name*="Offers"]')
-        #Затем находим все карточки внутри враппера
-        cards = self.driver.find_elements(By.CSS_SELECTOR, 'article[data-name*="CardComponent"]')
+        time.sleep(uniform(3, 5))
+
+        # Проверка на капчу (ручная пауза если нужно)
+        if "captcha" in self.driver.title.lower():
+            input("!!! Обнаружена капча. Решите её в браузере и нажмите Enter здесь...")
 
         links = []
-        #Проходим по всем карточкам и вытаскиваем ссылки и дату создания
-        for card in cards:
-            try:
-                link = card.find_element(By.TAG_NAME, 'a').get_attribute('href')
-                links.append({
-                    'url': link,
-                    'date': pd.Timestamp.now().strftime('%Y-%m-%d')
-                })
-            except Exception as e:
-                print(f"Error extracting link: {e}")
-                continue
+        try:
+            cards = self.driver.find_elements(By.CSS_SELECTOR, 'article[data-name="CardComponent"]')
+            print(f"Найдено карточек: {len(cards)}")
+
+            for card in cards:
+                try:
+                    link_el = card.find_element(By.CSS_SELECTOR, 'a[href*="/sale/flat/"]')
+                    link = link_el.get_attribute('href')
+                    if link not in [l['url'] for l in links]:
+                        links.append({
+                            'url': link,
+                            'date': pd.Timestamp.now().strftime('%Y-%m-%d')
+                        })
+                except Exception:
+                    continue
+        except Exception as e:
+            print(f"Ошибка при сборе ссылок: {e}")
+
         return links
-    #Парсим страницу по ссылке
+
+    def get_feature_by_text(self, text_label):
+        try:
+            xpath = f"//div[contains(text(), '{text_label}')]/following-sibling::div"
+            element = self.driver.find_element(By.XPATH, xpath)
+            return element.text
+        except:
+            try:
+                xpath = f"//span[contains(text(), '{text_label}')]/../following-sibling::span"  # или li
+                element = self.driver.find_element(By.XPATH, xpath)
+                return element.text
+            except:
+                return None
+
     def parse_page(self, url):
         self.driver.get(url)
-        time.sleep(uniform(7, 9))
+        time.sleep(uniform(4, 7))
+
         data = {'url': url}
-        wait = WebDriverWait(self.driver, 25)
+        price_found = False
+
         try:
-            self.driver.execute_script("window.scrollTo(0, 750);")
-            time.sleep(2)
-            #Цена жилья
-            price_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'span[data-name*="OfferPrice"]')))
-            price_raw = price_element.text
-            data['price'] = int(''.join(filter(str.isdigit, price_raw)))
-            #Площадь жилья
-            area_XPATH = "//span[contains(text(), 'Общая')]/following-sibling::span"
+            self.driver.execute_script("window.scrollTo(0, 300);")
+
+            # === 1. ПОИСК ЦЕНЫ ===
+            # Стратегия 1: Перебор XPath (только визуальные элементы)
+            price_xpaths = [
+                "//span[@itemprop='price']",
+                "//div[@data-name='PriceInfo']//span",
+                "//h1/following-sibling::div//span[contains(text(), '₽')]",
+                "//span[contains(text(), '₽') and not(contains(text(), 'за м'))]"  # Исключаем цену за метр
+            ]
+
+            for xpath in price_xpaths:
+                try:
+                    element = self.driver.find_element(By.XPATH, xpath)
+                    raw_text = element.text.strip()
+                    # Чистим от всего кроме цифр
+                    digits = ''.join(filter(str.isdigit, raw_text))
+                    if digits:
+                        clean_price = int(digits)
+                        # Фильтр: цена > 3 млн (в Строгино квартир дешевле нет, это отсечет аренду и ипотечные ставки)
+                        if clean_price > 5000000:
+                            data['price'] = clean_price
+                            price_found = True
+                            break
+                except:
+                    continue
+
+            # Стратегия 2: Если визуально не нашли, ищем в JS-объектах или Мета-тегах (ЭТО ТЕПЕРЬ ВНЕ ЦИКЛА)
+            if not price_found:
+                try:
+                    # Вариант А: Ищем в исходном коде страницы (самый надежный метод)
+                    page_source = self.driver.page_source
+                    if '"offerPrice":' in page_source:
+                        # Грубый парсинг JSON из текста страницы
+                        part = page_source.split('"offerPrice":')[1].split(',')[0]
+                        clean_price = int(''.join(filter(str.isdigit, part)))
+                        data['price'] = clean_price
+                        price_found = True
+                except:
+                    pass
+
+            # Стратегия 3: Мета-теги (последний шанс)
+            if not price_found:
+                try:
+                    # Ищем мета-тег с ценой (обратите внимание на разные варианты)
+                    meta = self.driver.find_element(By.CSS_SELECTOR, "meta[property='product:price:amount']")
+                    if meta:
+                        data['price'] = int(float(meta.get_attribute("content")))
+                        price_found = True
+                except:
+                    pass
+
+            if not price_found:
+                print(f"--- ЦЕНА НЕ НАЙДЕНА: {url}")
+                # Если цены нет, дальше парсить нет смысла
+                return data
+
+                # === 2. ОБЩАЯ ПЛОЩАДЬ ===
             try:
-                area_element = self.driver.find_element(By.XPATH, area_XPATH)
-                area_raw = area_element.text
-                data['area'] = float(area_raw.split()[0].replace('м²', '').replace(",", ".").rstrip(''))
+                # Ищем текст "Общая" и берем цифры рядом
+                area_element = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Общая')]/..")
+                area_text = area_element.text
+                # Вытаскиваем первое число с плавающей точкой
+                import re
+                match = re.search(r'(\d+[,.]\d+)', area_text)
+                if match:
+                    data['area'] = float(match.group(1).replace(',', '.'))
+                else:
+                    data['area'] = -1
             except:
                 data['area'] = -1
 
-            repair_xpath = "//span[contains(text(), 'Ремонт')]/following-sibling::span"
-            try:
-                repair_element = self.driver.find_element(By.XPATH, repair_xpath)
-                repair_raw = repair_element.text
-                data['renovation'] = renov_map.get(repair_raw, -1)
-            except:
-                data['renovation'] = -1
+            # === 3. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
+            renov_raw = self.get_feature_by_text("Ремонт")
+            data['renovation'] = renov_map.get(renov_raw, -1)
 
-            #Теперь блок кода где лежат доп параметры о жилье
-            all_list = self.driver.find_elements(By.CSS_SELECTOR, 'ul[class*="--list"]')
+            house_raw = self.get_feature_by_text("Тип дома")
+            data['house_type'] = house_type_map.get(house_raw, 0)
 
-            for features in all_list:
-                items = features.find_elements(By.CSS_SELECTOR, 'li[class*="--item"]')
+            parkin_raw = self.get_feature_by_text("Парковка")
+            data['parking'] = parking_map.get(parkin_raw, 0)
 
-                for item in items:
-                    content = item.text
-                    for cian_key, cian_csv in features_to_find.items():
-                        if cian_key in content:
-                            #Разбиваем по переносу строки, берем последний элемент (значение)
-                            value = content.split('\n')[-1].strip()
-                            #Маппинг значений
-                            if cian_key == "Отделка":
-                                data[cian_csv] = finish_map.get(value, -1)
-                            elif cian_key == "Класс":
-                                data[cian_csv] = class_map.get(value, -1)
-                            elif cian_key == "Парковка":
-                                data[cian_csv] = parking_map.get(value, -1)
-                            elif cian_key == "Тип дома":
-                                data[cian_csv] = house_type_map.get(value, 0)
-                            else:
-                                data[cian_csv] = value
+            finish_raw = self.get_feature_by_text("Отделка")
+            data['finish'] = finish_map.get(finish_raw, -1)
+
         except Exception as e:
-            print(f"Error extracting features: {url} : {e}")
+            print(f"Ошибка парсинга страницы: {e}")
+
         return data
-    #Сохранение данных в CSV
+
+
     def save_to_csv(self, data_list):
         new_df = pd.DataFrame(data_list)
+        # Очистка от пустых цен (если вдруг просочились)
+        new_df = new_df.dropna(subset=['price'])
+
         if os.path.exists(self.base_name):
             old_df = pd.read_csv(self.base_name)
-            # Удаляем дубликаты по URL, чтобы не парсить одно и то же дважды
             final_df = pd.concat([old_df, new_df]).drop_duplicates(subset=['url'], keep='last')
         else:
             final_df = new_df
+
         final_df.to_csv(self.base_name, index=False, encoding='utf-8-sig')
+        print(f"Файл {self.base_name} успешно обновлен!")
 
 
 if __name__ == '__main__':
-    parser = CianParserWrapper(url_main)
-    parser.ScrapSafari()
-    links = parser.get_links()
+    parser = CianParserWrapper(CIAN_STROGINO_APARTMENTS_URL)
+    parser.scrape_safari()
 
-    res_data = []
-    # Парсим первые 5 для теста
-    for i, link_data in enumerate(links[:5]):
-        url = link_data.get('url')
-        if not url:
-            continue
+    try:
+        links = parser.get_links()
 
-        print(f"[{i + 1}/5] Парсим: {url}")
-        info = parser.parse_page(url)
-
-        # СОХРАНЯЕМ ТОЛЬКО ЕСЛИ ЕСТЬ ЦЕНА
-        if 'price' in info:
-            info['date'] = link_data.get('date', pd.Timestamp.now().strftime('%Y-%m-%d'))
-            res_data.append(info)
-            print(f"--- Успешно: {info['price']} руб.")
+        if not links:
+            print("Ссылки не найдены. Возможно, капча или изменилась верстка.")
         else:
-            print(f"--- Пропущено: Данные не найдены для {url}")
+            res_data = []
+            # Парсим все сразу и сохраняем в csv
+            for i, link_data in enumerate(links):
+                url = link_data.get('url')
+                print(f"[{i + 1}] Парсим: {url}")
 
-    if res_data:
-        parser.save_to_csv(res_data)
-        print(f"Сохранено объектов: {len(res_data)}")
+                info = parser.parse_page(url)
 
-    parser.driver.quit()
-    print("Работа завершена.")
+                if 'price' in info:
+                    info['date'] = link_data.get('date')
+                    res_data.append(info)
+                else:
+                    print("   -> Не удалось извлечь данные.")
+
+            if res_data:
+                parser.save_to_csv(res_data)
+            else:
+                print("Нет данных для сохранения (res_data пуст).")
+
+    except Exception as e:
+        print(f"Глобальная ошибка: {e}")
+    finally:
+        # Не закрываем сразу, если хотим посмотреть на ошибку (можно закомментировать)
+        time.sleep(10)
+        parser.driver.quit()
