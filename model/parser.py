@@ -136,12 +136,10 @@ class CianParserWrapper:
 
             if not price_found:
                 print(f"--- ЦЕНА НЕ НАЙДЕНА: {url}")
-                # Если цены нет, дальше парсить нет смысла
                 return data
 
                 # === 2. ОБЩАЯ ПЛОЩАДЬ ===
             try:
-                # Ищем текст "Общая" и берем цифры рядом
                 area_element = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Общая')]/..")
                 area_text = area_element.text
                 # Вытаскиваем первое число с плавающей точкой
@@ -175,7 +173,6 @@ class CianParserWrapper:
 
     def save_to_csv(self, data_list):
         new_df = pd.DataFrame(data_list)
-        # Очистка от пустых цен (если вдруг просочились)
         new_df = new_df.dropna(subset=['price'])
 
         if os.path.exists(self.base_name):
