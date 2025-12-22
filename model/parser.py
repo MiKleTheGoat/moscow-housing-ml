@@ -1,12 +1,11 @@
-from selenium import webdriver
-from selenium.webdriver.safari.options import Options as SafariOptions
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
 import os
-import pandas as pd
 import time
 from random import uniform
+
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.safari.options import Options as SafariOptions
 
 house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3, "Блочный": 1, "Деревянный": 0,
                   "Кирпично-монолитный": 3}
@@ -16,7 +15,7 @@ parking_map = {"Подземная": 2, "Наземная": 1, "Многоуро
 finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1, "White box": 1, "Чистовая": 2, "С отделкой": 2,
               "Под ключ": 2}
 
-CIAN_STROGINO_APARTMENTS_URL = 'https://www.cian.ru/kupit-kvartiru-moskva-metro-strogino/'
+CIAN_STROGINO_APARTMENTS_URL = 'https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&foot_min=45&metro%5B0%5D=228&offer_type=flat&only_foot=2'
 
 
 class CianParserWrapper:
@@ -38,7 +37,7 @@ class CianParserWrapper:
 
         # Проверка на капчу (ручная пауза если нужно)
         if "captcha" in self.driver.title.lower():
-            input("!!! Обнаружена капча. Решите её в браузере и нажмите Enter здесь...")
+            input("!!! Обнаружена капча...")
 
         links = []
         try:
@@ -101,7 +100,6 @@ class CianParserWrapper:
                     digits = ''.join(filter(str.isdigit, raw_text))
                     if digits:
                         clean_price = int(digits)
-                        # Фильтр: цена > 3 млн (в Строгино квартир дешевле нет, это отсечет аренду и ипотечные ставки)
                         if clean_price > 5000000:
                             data['price'] = clean_price
                             price_found = True
@@ -109,7 +107,7 @@ class CianParserWrapper:
                 except:
                     continue
 
-            # Стратегия 2: Если визуально не нашли, ищем в JS-объектах или Мета-тегах (ЭТО ТЕПЕРЬ ВНЕ ЦИКЛА)
+            # Стратегия 2: Если визуально не нашли, ищем в JS-объектах или Мета-тегах
             if not price_found:
                 try:
                     # Вариант А: Ищем в исходном коде страницы (самый надежный метод)
@@ -135,24 +133,50 @@ class CianParserWrapper:
                     pass
 
             if not price_found:
-                print(f"--- ЦЕНА НЕ НАЙДЕНА: {url}")
+                print(f"Price not found for {url}")
                 return data
 
-                # === 2. ОБЩАЯ ПЛОЩАДЬ ===
+            # === 2. ОБЩАЯ ПЛОЩАДЬ ===
             try:
-                area_element = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Общая')]/..")
-                area_text = area_element.text
-                # Вытаскиваем первое число с плавающей точкой
+                area_val = -1
+                try:
+                    area_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
+                    for area_text in area_el:
+                        if "Общая площадь" in area_text.text:
+                            raw_text = area_text.text
+
+                except:
+                    h1_el = self.driver.find_element(By.TAG_NAME, "h1")
+                    raw_text = h1_el.text
+
+                # ОЧИСТКА ТЕКСТА
                 import re
-                match = re.search(r'(\d+[,.]\d+)', area_text)
-                if match:
-                    data['area'] = float(match.group(1).replace(',', '.'))
-                else:
-                    data['area'] = -1
-            except:
+                matches = re.findall(r'(\d+[.,]?\d*)', raw_text)
+
+                for match in matches:
+                    temp_val = float(match.replace(',', '.'))
+                    # ГЛАВНЫЙ ФИЛЬТР: Площадь квартиры в Строгино не может быть меньше 15 и больше 500 м².
+                    if 15 <= temp_val <= 500:
+                        area_val = temp_val
+                        break
+
+                data['area m²'] = area_val
+            except Exception as e:
+                print(f"Error with parsing Square: {e}")
                 data['area'] = -1
 
-            # === 3. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
+            # === 3. МЕТРО И УДАЛЕННОСТЬ ===
+            try:
+                metro_raw = self.driver.find_element(By.XPATH, "//a[contains(@href, 'metro')]")
+                data['metro'] = metro_raw.text
+
+                time_to_metro = self.driver.find_element(By.XPATH, "//a[contains(@href, 'metro')]/following-sibling::span")
+                data['time_to_metro'] = time_to_metro.text
+            except:
+                data['metro'] = "Not found"
+                data['time_to_metro'] = "Not found"
+
+            # === 4. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
             renov_raw = self.get_feature_by_text("Ремонт")
             data['renovation'] = renov_map.get(renov_raw, -1)
 
@@ -169,7 +193,6 @@ class CianParserWrapper:
             print(f"Ошибка парсинга страницы: {e}")
 
         return data
-
 
     def save_to_csv(self, data_list):
         new_df = pd.DataFrame(data_list)
@@ -197,7 +220,7 @@ if __name__ == '__main__':
         else:
             res_data = []
             # Парсим все сразу и сохраняем в csv
-            for i, link_data in enumerate(links):
+            for i, link_data in enumerate(links[:2]):
                 url = link_data.get('url')
                 print(f"[{i + 1}] Парсим: {url}")
 
@@ -217,6 +240,5 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Глобальная ошибка: {e}")
     finally:
-        # Не закрываем сразу, если хотим посмотреть на ошибку (можно закомментировать)
         time.sleep(10)
         parser.driver.quit()
