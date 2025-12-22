@@ -44,18 +44,7 @@ predictor.load_model('models/housing_model.pkl')
 ### Шаг 3: Использование парсера ЦИАН
 
 ```python
-# Импорт парсера
-from moscow_housing_ml import CianParser
 
-# Инициализация парсера
-parser = CianParser()
-
-# Получение актуальных данных с ЦИАН
-# Датафрейм автоматически обновляется
-fresh_data = parser.fetch_latest_listings()
-
-# Обновление модели новыми данными
-predictor.update_with_fresh_data(fresh_data)
 ```
 
 ### Шаг 4: Прогнозирование цен
