@@ -107,7 +107,7 @@ class CianParserWrapper:
                 except:
                     continue
 
-            # Стратегия 2: Если визуально не нашли, ищем в JS-объектах или Мета-тегах
+            # Стратегия 2: Если визуально не нашли, ищем в JS-объектах или Мета-тегах (ЭТО ТЕПЕРЬ ВНЕ ЦИКЛА)
             if not price_found:
                 try:
                     # Вариант А: Ищем в исходном коде страницы (самый надежный метод)
@@ -136,18 +136,20 @@ class CianParserWrapper:
                 print(f"Price not found for {url}")
                 return data
 
-            # === 2. ОБЩАЯ ПЛОЩАДЬ ===
+                # === 2. ОБЩАЯ ПЛОЩАДЬ ===
             try:
                 area_val = -1
-                try:
-                    area_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
-                    for area_text in area_el:
-                        if "Общая площадь" in area_text.text:
-                            raw_text = area_text.text
+                raw_text = ""
 
-                except:
-                    h1_el = self.driver.find_element(By.TAG_NAME, "h1")
-                    raw_text = h1_el.text
+                area_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
+                for area_text in area_el:
+                    if "Общая площадь" in area_text.text:
+                        raw_text = area_text.text
+                        break
+
+                if not raw_text:
+                    raw_text = self.driver.find_element(By.TAG_NAME, "h1")
+                    raw_text = raw_text.text
 
                 # ОЧИСТКА ТЕКСТА
                 import re
@@ -155,14 +157,13 @@ class CianParserWrapper:
 
                 for match in matches:
                     temp_val = float(match.replace(',', '.'))
-                    # ГЛАВНЫЙ ФИЛЬТР: Площадь квартиры в Строгино не может быть меньше 15 и больше 500 м².
                     if 15 <= temp_val <= 500:
                         area_val = temp_val
                         break
 
-                data['area m²'] = area_val
+                data['area'] = area_val
             except Exception as e:
-                print(f"Error with parsing Square: {e}")
+                print(f"Error problem with parsing square: {e}")
                 data['area'] = -1
 
             # === 3. МЕТРО И УДАЛЕННОСТЬ ===
