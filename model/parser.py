@@ -7,12 +7,17 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.safari.options import Options as SafariOptions
 
-house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3, "Блочный": 1, "Деревянный": 0,
-                  "Кирпично-монолитный": 3}
+house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3,
+                  "Блочный": 1, "Деревянный": 0, "Кирпично-монолитный": 3}
+
 renov_map = {"Дизайнерский": 3, "Евроремонт": 2, "Косметический": 1, "Без ремонта": 0}
+
 class_map = {"Премиум": 4, "Бизнес": 3, "Комфорт": 2, "Типовой": 1}
-parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1, "Нет": 0}
-finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1, "White box": 1, "Чистовая": 2, "С отделкой": 2,
+
+parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1, "Нет": 0, "Открытая": 1}
+
+finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1,
+              "White box": 1, "Чистовая": 2, "С отделкой": 2,
               "Под ключ": 2}
 
 CIAN_STROGINO_APARTMENTS_URL = 'https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&foot_min=45&metro%5B0%5D=228&offer_type=flat&only_foot=2'
@@ -139,21 +144,25 @@ class CianParserWrapper:
                 # === 2. ОБЩАЯ ПЛОЩАДЬ ===
             try:
                 area_val = -1
-                raw_text = ""
+                raw_text_square = ""
+                raw_text_floor = ""
 
                 area_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
                 for area_text in area_el:
                     if "Общая площадь" in area_text.text:
-                        raw_text = area_text.text
+                        raw_text_square = area_text.text
                         break
 
-                if not raw_text:
-                    raw_text = self.driver.find_element(By.TAG_NAME, "h1")
-                    raw_text = raw_text.text
+                # === 3. ЭТАЖ ИЗ ВСЕХ ЭТАЖЕЙ ===
+                floor_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
+                for floor_text in floor_el:
+                    if "Этаж" in floor_text.text:
+                        raw_text_floor = floor_text.text
+                        break
 
                 # ОЧИСТКА ТЕКСТА
                 import re
-                matches = re.findall(r'(\d+[.,]?\d*)', raw_text)
+                matches = re.findall(r'(\d+[.,]?\d*)', raw_text_square)
 
                 for match in matches:
                     temp_val = float(match.replace(',', '.'))
@@ -162,22 +171,42 @@ class CianParserWrapper:
                         break
 
                 data['area'] = area_val
+                data['floor'] = raw_text_floor
             except Exception as e:
                 print(f"Error problem with parsing square: {e}")
                 data['area'] = -1
+                data['floor'] = -1
 
-            # === 3. МЕТРО И УДАЛЕННОСТЬ ===
+            # === 4. МЕТРО И УДАЛЕННОСТЬ ===
             try:
                 metro_raw = self.driver.find_element(By.XPATH, "//a[contains(@href, 'metro')]")
                 data['metro'] = metro_raw.text
 
                 time_to_metro = self.driver.find_element(By.XPATH, "//a[contains(@href, 'metro')]/following-sibling::span")
-                data['time_to_metro'] = time_to_metro.text
+                if 'откроется' not in time_to_metro.text:
+                    data['time_to_metro'] = time_to_metro.text
             except:
-                data['metro'] = "Not found"
-                data['time_to_metro'] = "Not found"
+                data['metro'] = -1
+                data['time_to_metro'] = -1
 
-            # === 4. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
+            # === 5. ОТДЕЛКА ЖИЛЬЯ ===
+            try:
+                finish = None
+                finish_raw = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
+                for fin_text in finish_raw:
+                    if "отделк" in fin_text.text.lower():
+                        finish = fin_text.text.replace("Отделка", "").strip()
+                        break
+
+                if not finish:
+                    finish = self.get_feature_by_text("Отделка")
+
+                data['finish'] = finish_map.get(finish.title() if finish else "", -1)
+            except:
+                data['finish'] = -1
+
+
+            # === 6. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
             renov_raw = self.get_feature_by_text("Ремонт")
             data['renovation'] = renov_map.get(renov_raw, -1)
 
@@ -186,9 +215,6 @@ class CianParserWrapper:
 
             parkin_raw = self.get_feature_by_text("Парковка")
             data['parking'] = parking_map.get(parkin_raw, 0)
-
-            finish_raw = self.get_feature_by_text("Отделка")
-            data['finish'] = finish_map.get(finish_raw, -1)
 
         except Exception as e:
             print(f"Ошибка парсинга страницы: {e}")
