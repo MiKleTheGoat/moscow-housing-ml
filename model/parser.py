@@ -20,7 +20,8 @@ finish_map = {"Без отделки": 0, "Черновая": 0, "Предчис
               "White box": 1, "Чистовая": 2, "С отделкой": 2,
               "Под ключ": 2}
 
-CIAN_STROGINO_APARTMENTS_URL = 'https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&foot_min=45&metro%5B0%5D=228&offer_type=flat&only_foot=2'
+# CIAN_STROGINO_APARTMENTS_URL = "https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&offer_type=flat&p=1&region=1"
+## Ссылка на циан
 
 
 class CianParserWrapper:
@@ -35,11 +36,9 @@ class CianParserWrapper:
         self.driver = webdriver.Safari(options=options)
         self.driver.maximize_window()
 
-    def get_links(self):
+    def get_links_from_current_page(self):
         print(f"Заходим на главную страницу: {self.base_url}")
-        self.driver.get(self.base_url)
         time.sleep(uniform(3, 5))
-
         # Проверка на капчу (ручная пауза если нужно)
         if "captcha" in self.driver.title.lower():
             input("!!! Обнаружена капча...")
@@ -112,10 +111,10 @@ class CianParserWrapper:
                 except:
                     continue
 
-            # Стратегия 2: Если визуально не нашли, ищем в JS-объектах или Мета-тегах (ЭТО ТЕПЕРЬ ВНЕ ЦИКЛА)
+                # Если визуально не нашли, ищем в JS-объектах или Мета-тегах (ЭТО ТЕПЕРЬ ВНЕ ЦИКЛА)
             if not price_found:
                 try:
-                    # Вариант А: Ищем в исходном коде страницы (самый надежный метод)
+                    # Вариант 1: Ищем в исходном коде страницы (самый надежный метод)
                     page_source = self.driver.page_source
                     if '"offerPrice":' in page_source:
                         # Грубый парсинг JSON из текста страницы
@@ -179,12 +178,12 @@ class CianParserWrapper:
 
             # === 4. МЕТРО И УДАЛЕННОСТЬ ===
             try:
-                metro_raw = self.driver.find_element(By.XPATH, "//a[contains(@href, 'metro')]")
+                metro_raw = self.driver.find_element(By.XPATH, "//a[contains(@class, 'underground_link')]")
                 data['metro'] = metro_raw.text
 
-                time_to_metro = self.driver.find_element(By.XPATH, "//a[contains(@href, 'metro')]/following-sibling::span")
+                time_to_metro = self.driver.find_element(By.XPATH, "//a[contains(@class, 'underground_link')]/following-sibling::span")
                 if 'откроется' not in time_to_metro.text:
-                    data['time_to_metro'] = time_to_metro.text
+                    data['time_to_metro'] = time_to_metro.text.strip()
             except:
                 data['metro'] = -1
                 data['time_to_metro'] = -1
@@ -204,7 +203,6 @@ class CianParserWrapper:
                 data['finish'] = finish_map.get(finish.title() if finish else "", -1)
             except:
                 data['finish'] = -1
-
 
             # === 6. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
             renov_raw = self.get_feature_by_text("Ремонт")
@@ -235,23 +233,53 @@ class CianParserWrapper:
         print(f"Файл {self.base_name} успешно обновлен!")
 
 
-if __name__ == '__main__':
-    parser = CianParserWrapper(CIAN_STROGINO_APARTMENTS_URL)
+def page_updater_and_run_parser():
+    base_url = "https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&offer_type=flat&region=1"
+    parser = CianParserWrapper(base_url)
     parser.scrape_safari()
 
-    try:
-        links = parser.get_links()
+    all_links = []
+    unique_links = set()
+    page_num = 1
 
-        if not links:
+    try:
+        while True:
+            print(f"--- СКАНИРУЕМ СТРАНИЦУ {page_num} ---")
+            curr_page = f"{base_url}&p={page_num}"
+
+            parser.driver.get(curr_page)
+            time.sleep(uniform(4, 5))
+
+            page_link = parser.get_links_from_current_page()
+
+            count = 0
+            for link in page_link:
+                if  link['url'] not in unique_links:
+                    unique_links.add(link['url'])
+                    all_links.append(link)
+                    count += 1
+
+            if not page_link:
+                break
+
+            print(f"--- Успешно собрано {len(page_link)} ссылок из {len(all_links)} ---")
+
+            if page_num >= 1:
+                break
+
+            page_num += 1
+
+        if not all_links:
             print("Ссылки не найдены. Возможно, капча или изменилась верстка.")
         else:
             res_data = []
             # Парсим все сразу и сохраняем в csv
-            for i, link_data in enumerate(links[:2]):
+            for i, link_data in enumerate(all_links[:4]):
                 url = link_data.get('url')
-                print(f"[{i + 1}] Парсим: {url}")
+                print(f"[{i + 1}/{len(all_links[:4])}] Парсим: {url}")
 
                 info = parser.parse_page(url)
+                time.sleep(uniform(4, 5))
 
                 if 'price' in info:
                     info['date'] = link_data.get('date')
@@ -263,9 +291,12 @@ if __name__ == '__main__':
                 parser.save_to_csv(res_data)
             else:
                 print("Нет данных для сохранения (res_data пуст).")
-
     except Exception as e:
         print(f"Глобальная ошибка: {e}")
     finally:
-        time.sleep(10)
-        parser.driver.quit()
+        if parser.driver:
+            time.sleep(10)
+            parser.driver.quit()
+
+if __name__ == '__main__':
+    page_updater_and_run_parser()
