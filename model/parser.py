@@ -2,17 +2,19 @@ import os
 import time
 from random import uniform
 
+from re import search, sub
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.safari.options import Options as SafariOptions
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 
 house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3,
-                  "Блочный": 1, "Деревянный": 0, "Кирпично-монолитный": 3}
+                  "Блочный": 1, "Деревянный": 0, "Монолитно-кирпичный": 3}
 
 renov_map = {"Дизайнерский": 3, "Евроремонт": 2, "Косметический": 1, "Без ремонта": 0}
-
-class_map = {"Премиум": 4, "Бизнес": 3, "Комфорт": 2, "Типовой": 1}
 
 parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1, "Нет": 0, "Открытая": 1}
 
@@ -30,10 +32,36 @@ class CianParserWrapper:
         self.base_name = 'house_cian.csv'
         self.driver = None
 
-    def scrape_safari(self):
-        print("Запуск Safari...")
-        options = SafariOptions()
-        self.driver = webdriver.Safari(options=options)
+    def setup_chrome(self):
+        print("Запуск Chrome...")
+        options = ChromeOptions()
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+
+        # НАСТРОЙКА ДЛЯ СЕРВАКА (Комментируй если будешь с простого ноутбука запускать)
+
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("window-size=1920,1080")
+
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
+
+        service = Service(ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=service, options=options)
+
+        self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": """
+                    Object.defineProperty(navigator, 'webdriver', {
+                      get: () => undefined
+                    })
+                """
+        })
         self.driver.maximize_window()
 
     def get_links_from_current_page(self):
@@ -71,7 +99,7 @@ class CianParserWrapper:
             return element.text
         except:
             try:
-                xpath = f"//span[contains(text(), '{text_label}')]/../following-sibling::span"  # или li
+                xpath = f"//span[contains(text(), '{text_label}')]/../following-sibling::span" 
                 element = self.driver.find_element(By.XPATH, xpath)
                 return element.text
             except:
@@ -156,7 +184,8 @@ class CianParserWrapper:
                 floor_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
                 for floor_text in floor_el:
                     if "Этаж" in floor_text.text:
-                        raw_text_floor = floor_text.text
+                        floor_text = sub(r'^\D*', '', floor_text.text)
+                        raw_text_floor = floor_text
                         break
 
                 # ОЧИСТКА ТЕКСТА
@@ -178,41 +207,77 @@ class CianParserWrapper:
 
             # === 4. МЕТРО И УДАЛЕННОСТЬ ===
             try:
-                metro_raw = self.driver.find_element(By.XPATH, "//a[contains(@class, 'underground_link')]")
+                metro_raw = self.driver.find_element(By.CSS_SELECTOR, "a[class*='underground_link']")
                 data['metro'] = metro_raw.text
 
-                time_to_metro = self.driver.find_element(By.XPATH, "//a[contains(@class, 'underground_link')]/following-sibling::span")
-                if 'откроется' not in time_to_metro.text:
-                    data['time_to_metro'] = time_to_metro.text.strip()
+                time_to_metro = self.driver.find_element(By.CSS_SELECTOR, "span[class*='underground_time']")
+                raw_time_metro = time_to_metro.text
+                if 'откроется' in raw_time_metro:
+                    data['time_to_metro_minutes'] = -1
+                else:
+                    res = search(r'\d+', raw_time_metro)
+                    data['time_to_metro_minutes'] = int(res.group())
             except:
                 data['metro'] = -1
-                data['time_to_metro'] = -1
+                data['time_to_metro_minutes'] = -1
 
             # === 5. ОТДЕЛКА ЖИЛЬЯ ===
             try:
-                finish = None
-                finish_raw = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='ObjectFactoidsItem']")
+                finish_text = ""
+                finish_raw = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='OfferSummaryInfoItem']")
+
                 for fin_text in finish_raw:
                     if "отделк" in fin_text.text.lower():
-                        finish = fin_text.text.replace("Отделка", "").strip()
+                        finish = fin_text.text.split('\n')
+                        if len(finish) > 1:
+                            finish_text = finish[1]
                         break
 
-                if not finish:
-                    finish = self.get_feature_by_text("Отделка")
+                if not finish_text:
+                    finish_text = self.get_feature_by_text("Отделка")
 
-                data['finish'] = finish_map.get(finish.title() if finish else "", -1)
+                key_word_finish = finish_text.split()[0].title() if finish_text else ""
+                data['finish'] = finish_map.get(key_word_finish, -1)
             except:
                 data['finish'] = -1
 
-            # === 6. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
-            renov_raw = self.get_feature_by_text("Ремонт")
-            data['renovation'] = renov_map.get(renov_raw, -1)
+
+            # === 6. РЕНОВАЦИЯ ===
+
+            try:
+                raw_ren_text = ""
+                ren_el = self.driver.find_elements(By.CSS_SELECTOR, "div[data-name='OfferSummaryInfoItem']")
+                for ren_text in ren_el:
+                    if "ремон" in ren_text.text.lower():
+                        ren_base = ren_text.text.split('\n')
+                        raw_ren_text = ren_base[1]
+                        break
+
+                if not raw_ren_text:
+                    raw_ren_text = self.get_feature_by_text("Ремонт")
+
+                key_word_ren = raw_ren_text.split()[0].title() if raw_ren_text else ""
+                data['renovation'] = renov_map.get(key_word_ren, -1)
+            except:
+                data['renovation'] = -1
+
+            # === 7. ОСТАЛЬНЫЕ ПАРАМЕТРЫ ===
 
             house_raw = self.get_feature_by_text("Тип дома")
             data['house_type'] = house_type_map.get(house_raw, 0)
 
             parkin_raw = self.get_feature_by_text("Парковка")
             data['parking'] = parking_map.get(parkin_raw, 0)
+
+            # === ГОД ПОСТРОЙКИ ===
+            try:
+                raw_year = ""
+                el_year = self.driver.find_element(By.CSS_SELECTOR, "div[class*='text]")
+                raw_year = el_year.text
+                data['year_built'] = raw_year
+
+            except:
+                data['year_built'] = -1
 
         except Exception as e:
             print(f"Ошибка парсинга страницы: {e}")
@@ -236,7 +301,7 @@ class CianParserWrapper:
 def page_updater_and_run_parser():
     base_url = "https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&offer_type=flat&region=1"
     parser = CianParserWrapper(base_url)
-    parser.scrape_safari()
+    parser.setup_chrome()
 
     all_links = []
     unique_links = set()
@@ -264,7 +329,7 @@ def page_updater_and_run_parser():
 
             print(f"--- Успешно собрано {len(page_link)} ссылок из {len(all_links)} ---")
 
-            if page_num >= 1:
+            if page_num >= 38:
                 break
 
             page_num += 1
@@ -274,9 +339,9 @@ def page_updater_and_run_parser():
         else:
             res_data = []
             # Парсим все сразу и сохраняем в csv
-            for i, link_data in enumerate(all_links[:4]):
+            for i, link_data in enumerate(all_links[:1000]):
                 url = link_data.get('url')
-                print(f"[{i + 1}/{len(all_links[:4])}] Парсим: {url}")
+                print(f"[{i + 1}/{len(all_links[:1000])}] Парсим: {url}")
 
                 info = parser.parse_page(url)
                 time.sleep(uniform(4, 5))
