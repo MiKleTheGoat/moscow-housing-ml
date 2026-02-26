@@ -14,9 +14,11 @@ from webdriver_manager.chrome import ChromeDriverManager
 house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3,
                   "Блочный": 1, "Деревянный": 0, "Монолитно-кирпичный": 3}
 
-renov_map = {"Дизайнерский": 3, "Евроремонт": 2, "Косметический": 1, "Без ремонта": 0}
+renov_map = {"Дизайнерский": 3, "Евроремонт": 2,
+             "Косметический": 1, "Без ремонта": 0}
 
-parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1, "Нет": 0, "Открытая": 1}
+parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1,
+               "Нет": 0, "Открытая": 1}
 
 finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1,
               "White box": 1, "Чистовая": 2, "С отделкой": 2,
@@ -67,9 +69,9 @@ class CianParserWrapper:
     def get_links_from_current_page(self):
         print(f"Заходим на главную страницу: {self.base_url}")
         time.sleep(uniform(3, 5))
-        # Проверка на капчу (ручная пауза если нужно)
-        if "captcha" in self.driver.title.lower():
-            input("!!! Обнаружена капча...")
+        # Проверка на капчу (ручная пауза если нужно) - (раскомментируй если будут проблемы с капчей)
+        # if "captcha" in self.driver.title.lower():
+        #     input("!!! Обнаружена капча...")
 
         links = []
         try:
@@ -116,7 +118,7 @@ class CianParserWrapper:
             self.driver.execute_script("window.scrollTo(0, 300);")
 
             # === 1. ПОИСК ЦЕНЫ ===
-            # Стратегия 1: Перебор XPath (только визуальные элементы)
+            # Перебор XPath (только визуальные элементы)
             price_xpaths = [
                 "//span[@itemprop='price']",
                 "//div[@data-name='PriceInfo']//span",
@@ -139,10 +141,10 @@ class CianParserWrapper:
                 except:
                     continue
 
-                # Если визуально не нашли, ищем в JS-объектах или Мета-тегах (ЭТО ТЕПЕРЬ ВНЕ ЦИКЛА)
+                # Если визуально не нашли, ищем в JS-объектах или Мета-тегах
             if not price_found:
                 try:
-                    # Вариант 1: Ищем в исходном коде страницы (самый надежный метод)
+                    # Варик 1: Ищем в исходном коде страницы (самый надежный метод)
                     page_source = self.driver.page_source
                     if '"offerPrice":' in page_source:
                         # Грубый парсинг JSON из текста страницы
@@ -153,10 +155,10 @@ class CianParserWrapper:
                 except:
                     pass
 
-            # Стратегия 3: Мета-теги (последний шанс)
+            # Варик 2: Мета-теги (ласт проверка если не нашли в предыдущих пунктах)
             if not price_found:
                 try:
-                    # Ищем мета-тег с ценой (обратите внимание на разные варианты)
+                    # Ищем мета-тег с ценой
                     meta = self.driver.find_element(By.CSS_SELECTOR, "meta[property='product:price:amount']")
                     if meta:
                         data['price'] = int(float(meta.get_attribute("content")))
@@ -269,7 +271,7 @@ class CianParserWrapper:
             parkin_raw = self.get_feature_by_text("Парковка")
             data['parking'] = parking_map.get(parkin_raw, 0)
 
-            # === ГОД ПОСТРОЙКИ ===
+            # === ГОД ПОСТРОЙКИ (ЭКСТРА) ===
             try:
                 raw_year = ""
                 el_year = self.driver.find_element(By.CSS_SELECTOR, "div[class*='text]")

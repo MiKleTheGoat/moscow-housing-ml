@@ -72,8 +72,8 @@ class HousingPricePredictor:
         predictions = self.model.predict(X_val)
         print(" --- РЕЗУЛЬТАТЫ НА ВАЛИДАЦИИ ---")
         print(f"MAE: {mean_absolute_error(y_val, predictions):,.0f} руб.")
-        print(f"MSE: {mean_squared_error(y_val, predictions):,.0f}")
-        print(f"R2 Score: {r2_score(y_val, predictions):.4f}")
+        print(f"MSE: {mean_squared_error(y_val, predictions):,.0f} руб.")
+        print(f"R2 Score: {r2_score(y_val, predictions):.4f} руб.")
 
         self.save_model()
 
