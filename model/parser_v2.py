@@ -26,6 +26,7 @@ MOSCOW_CENTER_LNG = 37.6208
 
 def calculate_distance(lat1, lat2, lon1, lon2):
     pass
+    ...
 
 logging.basicConfig(
     level=logging.INFO,
