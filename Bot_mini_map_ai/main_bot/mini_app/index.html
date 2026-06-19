@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>RoadMap AI</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header>
+      <div class="header-icon" aria-hidden="true">📍</div>
+      <div class="header-text">
+        <h1>RoadMap AI</h1>
+        <p class="subtitle">Поиск квартир · Москва</p>
+      </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav role="tablist" aria-label="Разделы">
+      <button class="tab active" role="tab" aria-selected="true"
+              data-tab="predict" id="tab-predict">Прогноз</button>
+      <button class="tab" role="tab" aria-selected="false"
+              data-tab="map-tab" id="tab-map" id="mapTabButton">Карта</button>
+      <button class="tab" role="tab" aria-selected="false"
+              data-tab="stats" id="tab-stats">Рынок</button>
+      <button class="tab" role="tab" aria-selected="false"
+              data-tab="parser" id="tab-parser">Парсер</button>
+    </nav>
+
+    <!-- ── Прогноз ───────────────────────────────────────────────── -->
+    <section id="predict" class="tab-content active"
+             role="tabpanel" aria-labelledby="tab-predict">
+
+      <form id="predictForm" novalidate>
+        <div class="stack">
+          <div class="field">
+            <span class="field-label">Площадь, м²</span>
+            <input type="number" name="area" value="50"
+                   min="10" max="500" required
+                   inputmode="decimal" placeholder="50">
+          </div>
+
+          <div class="field">
+            <span class="field-label">Этаж</span>
+            <input type="number" name="floor" value="5"
+                   min="1" max="60" required
+                   inputmode="numeric" placeholder="5">
+          </div>
+
+          <div class="field">
+            <span class="field-label">До метро, мин</span>
+            <input type="number" name="time_to_metro" value="5"
+                   min="1" max="120" required
+                   inputmode="numeric" placeholder="5">
+          </div>
+
+          <div class="field">
+            <span class="field-label">Ремонт</span>
+            <div class="select-wrap">
+              <select name="renovation">
+                <option value="0">Без ремонта</option>
+                <option value="1">Косметический</option>
+                <option value="2">Евроремонт</option>
+                <option value="3">Дизайнерский</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Тип дома</span>
+            <div class="select-wrap">
+              <select name="house_type">
+                <option value="3">Монолитный</option>
+                <option value="2">Панельный</option>
+                <option value="3">Кирпичный</option>
+                <option value="1">Блочный</option>
+                <option value="0">Деревянный</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="calcBtn">
+          <span class="btn-label">Рассчитать стоимость</span>
+        </button>
+      </form>
+
+      <div id="result" class="hidden" role="status" aria-live="polite">
+        <p class="result-label">Прогноз рыночной цены</p>
+        <p class="result-price" id="resultPrice">—</p>
+      </div>
+    </section>
+
+    <!-- ── Карта ─────────────────────────────────────────────────── -->
+    <section id="map-tab" class="tab-content"
+             role="tabpanel" aria-labelledby="tab-map">
+
+      <div class="map-legend" aria-label="Легенда карты">
+        <div class="legend-item">
+          <span class="legend-dot green"></span>Выгодно
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot amber"></span>Нейтрально
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot red"></span>Переплата
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot blue"></span>Вы
+        </div>
+      </div>
+
+      <div id="map" style="height: 440px; border-radius: 12px;"
+           aria-label="Карта предложений"></div>
+    </section>
+
+    <!-- ── Рынок ─────────────────────────────────────────────────── -->
+    <section id="stats" class="tab-content"
+             role="tabpanel" aria-labelledby="tab-stats">
+
+      <p class="section-title">Аналитика рынка</p>
+
+      <div class="stat-grid">
+        <div class="stat-cell" id="statTotal">
+          <div class="stat-value">—</div>
+          <div class="stat-key">Объявлений в базе</div>
+        </div>
+        <div class="stat-cell accent" id="statAvgPrice">
+          <div class="stat-value">—</div>
+          <div class="stat-key">Средняя цена</div>
+        </div>
+        <div class="stat-cell" id="statGood">
+          <div class="stat-value">—</div>
+          <div class="stat-key">Выгодных</div>
+        </div>
+        <div class="stat-cell" id="statAvgArea">
+          <div class="stat-value">—</div>
+          <div class="stat-key">Средняя площадь</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Парсер ────────────────────────────────────────────────── -->
+    <section id="parser" class="tab-content"
+             role="tabpanel" aria-labelledby="tab-parser">
+
+      <div class="stack">
+        <div class="parser-status-row">
+          <span class="parser-status-label">Статус парсера</span>
+          <span class="status-badge idle" id="parserStatus">Ожидание</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <button class="btn-primary" id="startParse">
+          <span class="btn-label">Запустить парсинг ЦИАН</span>
+        </button>
+      </div>
+    </section>
+
+  </div><!-- /#app -->
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+__pycache__/
+.venv/
+*.pyc
+.env
+Bot_mini_map_ai/data/csv/
+Bot_mini_map_ai/data/models/
+data/*.db
+Bot_mini_map_ai/data/parse_state.json
+Bot_mini_map_ai/data/cian_cookies.json
+*.log
+.cache/
