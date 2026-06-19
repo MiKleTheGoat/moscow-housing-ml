@@ -2,6 +2,11 @@ import os
 import time
 from random import uniform
 
+
+import math as m
+import logging
+import asyncio
+import httpx
 from re import search, sub
 import pandas as pd
 from selenium import webdriver
@@ -11,21 +16,37 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3,
-                  "Блочный": 1, "Деревянный": 0, "Монолитно-кирпичный": 3}
-
-renov_map = {"Дизайнерский": 3, "Евроремонт": 2,
-             "Косметический": 1, "Без ремонта": 0}
-
-parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1,
-               "Нет": 0, "Открытая": 1}
-
-finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1,
-              "White box": 1, "Чистовая": 2, "С отделкой": 2,
-              "Под ключ": 2}
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("parser.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+#Маппинги для характиристики параметров
+house_type_map = {"Монолитный": 3, "Панельный": 2, "Кирпичный": 3, "Блочный": 1, "Деревянный": 0, "Монолитно-кирпичный": 3}
+renov_map = {"Дизайнерский": 3, "Евроремонт": 2, "Косметический": 1, "Без ремонта": 0}
+parking_map = {"Подземная": 2, "Наземная": 1, "Многоуровневая": 1, "Нет": 0, "Открытая": 1}
+finish_map = {"Без отделки": 0, "Черновая": 0, "Предчистовая": 1, "White box": 1, "Чистовая": 2, "С отделкой": 2, "Под ключ": 2}
 
 # CIAN_STROGINO_APARTMENTS_URL = "https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&offer_type=flat&p=1&region=1"
 ## Ссылка на циан
+
+"""Вычисляет расстояние в км между двумя точками на сфере"""
+
+def calculate_distance(lat1, lat2, lon1, lon2):
+    R = 6371
+    d_lat = m.radians(lat2 - lat1)
+    d_lon = m.radians(lon2 - lon1)
+
+    a = m.sin(d_lat / 2) ** 2 + \
+        m.cos(m.radians(lat1)) * m.cos(m.radians(lat2)) * \
+        m.sin(d_lon / 2) ** 2
+
+    c = 2 * m.atan2(m.sqrt(a), m.sqrt(1 - a))
+    return round(R * c, 2)
 
 
 class CianParserWrapper:
@@ -67,16 +88,12 @@ class CianParserWrapper:
         self.driver.maximize_window()
 
     def get_links_from_current_page(self):
-        print(f"Заходим на главную страницу: {self.base_url}")
+        logger.info(f"Заходим на главную страницу: {self.base_url}")
         time.sleep(uniform(3, 5))
-        # Проверка на капчу (ручная пауза если нужно) - (раскомментируй если будут проблемы с капчей)
-        # if "captcha" in self.driver.title.lower():
-        #     input("!!! Обнаружена капча...")
-
         links = []
         try:
             cards = self.driver.find_elements(By.CSS_SELECTOR, 'article[data-name="CardComponent"]')
-            print(f"Найдено карточек: {len(cards)}")
+            logger.info(f"Найдено карточек: {len(cards)}")
 
             for card in cards:
                 try:
@@ -90,7 +107,7 @@ class CianParserWrapper:
                 except Exception:
                     continue
         except Exception as e:
-            print(f"Ошибка при сборе ссылок: {e}")
+            logger.error(f"Ошибка при сборе ссылок: {e}")
 
         return links
 
@@ -167,7 +184,7 @@ class CianParserWrapper:
                     pass
 
             if not price_found:
-                print(f"Price not found for {url}")
+                logger.info(f"Price not found for {url}")
                 return data
 
                 # === 2. ОБЩАЯ ПЛОЩАДЬ ===
@@ -203,7 +220,7 @@ class CianParserWrapper:
                 data['area'] = area_val
                 data['floor'] = raw_text_floor
             except Exception as e:
-                print(f"Error problem with parsing square: {e}")
+                logger.error(f"Error problem with parsing square: {e}")
                 data['area'] = -1
                 data['floor'] = -1
 
@@ -282,7 +299,7 @@ class CianParserWrapper:
                 data['year_built'] = -1
 
         except Exception as e:
-            print(f"Ошибка парсинга страницы: {e}")
+            logger.error(f"Ошибка парсинга страницы: {e}")
 
         return data
 
@@ -329,21 +346,21 @@ def page_updater_and_run_parser():
             if not page_link:
                 break
 
-            print(f"--- Успешно собрано {len(page_link)} ссылок из {len(all_links)} ---")
+            logger.info(f"--- Успешно собрано {len(page_link)} ссылок из {len(all_links)} ---")
 
-            if page_num >= 38:
+            if page_num >= 1:
                 break
 
             page_num += 1
 
         if not all_links:
-            print("Ссылки не найдены. Возможно, капча или изменилась верстка.")
+            logger.warning("Ссылки не найдены. Возможно, капча или изменилась верстка.")
         else:
             res_data = []
             # Парсим все сразу и сохраняем в csv
-            for i, link_data in enumerate(all_links[:1000]):
+            for i, link_data in enumerate(all_links[:10]):
                 url = link_data.get('url')
-                print(f"[{i + 1}/{len(all_links[:1000])}] Парсим: {url}")
+                logger.info(f"[{i + 1}/{len(all_links[:1000])}] Парсим: {url}")
 
                 info = parser.parse_page(url)
                 time.sleep(uniform(4, 5))
@@ -357,9 +374,9 @@ def page_updater_and_run_parser():
             if res_data:
                 parser.save_to_csv(res_data)
             else:
-                print("Нет данных для сохранения (res_data пуст).")
+                logger.warning("Нет данных для сохранения (res_data пуст).")
     except Exception as e:
-        print(f"Глобальная ошибка: {e}")
+        logger.error(f"Глобальная ошибка: {e}")
     finally:
         if parser.driver:
             time.sleep(10)

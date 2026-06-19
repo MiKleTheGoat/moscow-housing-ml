@@ -1,115 +1,109 @@
 # 🏠 Moscow Housing ML - Прогнозирование цен на недвижимость в Москве
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Machine Learning](https://img.shields.io/badge/ML-Housing%20Prices-green.svg)](https://github.com/MiKleTheGoat/moscow-housing-ml)
-[![CIAN Parser](https://img.shields.io/badge/Parser-CIAN-orange.svg)](https://www.cian.ru/)
+[![aiogram 3.x](https://img.shields.io/badge/aiogram-3.x-blue.svg)](https://docs.aiogram.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 
-## 📋 Описание проекта
-
-**Moscow Housing ML** - это интеллектуальная модель машинного обучения для прогнозирования цен на недвижимость в Москве. Ключевая особенность проекта - **автоматическое обновление данных** благодаря встроенному парсеру ЦИАН (CIAN).
-
-### ✨ Основные особенности
-
-- 🔄 **Автообновляемый датафрейм** - данные автоматически обновляются через парсер ЦИАН
-- 🤖 **ML-прогнозирование** - точные предсказания цен на основе актуальных данных рынка
-- 📊 **Актуальные данные** - информация о недвижимости обновляется в реальном времени
-- 🎯 **Высокая точность** - модель обучена на большом объеме данных с рынка недвижимости Москвы
-
-## 🚀 Как интегрировать модель в свой проект
-
-### Шаг 1: Установка зависимостей
-
-```bash
-# Клонируйте репозиторий
-git clone https://github.com/MiKleTheGoat/moscow-housing-ml.git
-cd moscow-housing-ml
-
-# Установите необходимые библиотеки
-pip install -r requirements.txt
-```
-
-### Шаг 2: Импорт модели в ваш проект
-
-```python
-# Импорт модели прогнозирования
-from moscow_housing_ml import HousingPricePredictor
-
-# Инициализация модели
-predictor = HousingPricePredictor()
-
-# Загрузка предобученной модели
-predictor.load_model('models/housing_model.pkl')
-```
-
-### Шаг 3: Использование парсера ЦИАН
-
-```python
-
-```
-
-### Шаг 4: Прогнозирование цен
-
-```python
-# Подготовка данных для прогноза
-property_features = {
-    'area': 50,           # Площадь в м²
-    'metro': Строгино,    # Ближайшее
-    'floor': 5,           # Этаж
-    'time_to_metro':5,    # Время до метро(в минутах)
-    'renovation':(-1:2),  #Ремонт(в зависимости от -1:2)
-    'house_type':(0:3),   #Тип допа (в зависимости от 0:3)
-    'parking':(0:2),      #Наличие порковки (в зависимости от 0:2)
-    'finish':(0:2),       #Отделка (в зависимости от 0:2)
-    'date':'Y-m-d',       #Дата создания обьявления
-}
-
-# Получение прогноза цены
-predicted_price = predictor.predict(property_features)
-print(f"Прогнозируемая цена: {predicted_price:,.0f} ₽")
-```
-
-## 📦 Структура проекта
-
-```
-moscow-housing-ml/
-│   ├── predictor.py    # Модель прогнозирования
-│   ├── parser.py       # Парсер ЦИАН
-├── requirements.txt    # Зависимости проекта
-└── README.md          # Документация
-```
-
-## 🔧 Технологии
-
-- **Python 3.8+**
-- **Scikit-learn** - для машинного обучения
-- **Pandas & NumPy** - для обработки данных
-- **BeautifulSoup4 / Selenium** - для парсинга ЦИАН
-- **Requests** - для HTTP-запросов
-
-## 💡 Принцип работы автообновления
-
-Модель использует **автообновляемый датафрейм**, который регулярно пополняется актуальными объявлениями с ЦИАН:
-
-1. 🕷️ **Парсер ЦИАН** - собирает свежие объявления о продаже недвижимости
-2. 🔄 **Обновление данных** - новые данные автоматически добавляются в датафрейм
-3. 🤖 **Дообучение модели** - модель периодически переобучается на актуальных данных
-4. 📈 **Точные прогнозы** - предсказания учитывают текущую рыночную ситуацию
-
-## 📊 Точность модели
-
-Модель обучена на данных и показывает следующие метрики:
-
-- **R² Score**: > 0.85
-- **MAE**: < 500,000 ₽
-- **RMSE**: < 800,000 ₽
-
-*Примечание: Точность зависит от актуальности данных и специфики объекта недвижимости*
-
-
-## ⚠️ Disclaimer
-
-Данная модель предоставляет прогнозные оценки и не является официальной оценкой недвижимости. Используйте результаты как ориентир, но не как финансовую рекомендацию.
+**Moscow Housing ML** — это комплексная экосистема для сбора данных, обучения моделей машинного обучения и прогнозирования цен на недвижимость в Москве. Проект включает в себя парсер объявлений недвижимости (ЦИАН), FastAPI-сервер для инференса и обучения, а также интерактивного Telegram-бота с поддержкой Telegram Mini Apps.
 
 ---
 
-**Сделано с ❤️ для анализа рынка недвижимости Москвы**
+## 📂 Структура проекта
+
+```text
+bot_mini_map_ml_moscow/
+├── api/                  # FastAPI сервер (ML-инференс, API для парсера)
+│   ├── routes/           # Эндпоинты для парсинга, обучения и предсказаний
+│   ├── main.py           # Запуск FastAPI
+│   └── schemas.py        # Схемы валидации Pydantic
+│
+├── bot/                  # Telegram-бот (aiogram 3.x)
+│   ├── handlers/         # Обработчики команд, FSM-сценариев, локации и ML
+│   ├── keyboards/        # Кнопки и клавиатуры
+│   ├── mini_app/         # Telegram Mini App (HTML/CSS/JS фронтенд)
+│   └── main.py           # Запуск Telegram-бота
+│
+├── parser/               # Модуль веб-скрейпинга (ЦИАН)
+│   ├── playwright.py     # Парсер на Playwright (с обходом защит)
+│   └── resumer.py        # Управление возобновлением парсинга
+│
+├── ml/                   # Модуль машинного обучения
+│   ├── train.py          # Скрипты обучения/дообучения (XGBoost / Optuna)
+│   └── predict.py        # Инференс модели
+│
+├── model/                # Референсные материалы (исходный код и ноутбуки)
+│   ├── model.py          # Исходный класс прогнозирования HousingPricePredictor
+│   ├── parser.py         # Первоначальный вариант парсера
+│   └── reader.ipynb      # Исследовательский Jupyter Notebook
+│
+├── config/               # Управление конфигурацией
+│   ├── settings.py       # Pydantic Settings
+│
+├── data/                 # Локальное хранилище (БД, CSV, веса моделей)
+└── storage/              # Файловые хранилища и сессии
+
+```
+
+---
+
+## 🛠️ Технологии
+
+* **Backend**: FastAPI, Uvicorn, Pydantic v2
+* **Telegram Bot**: aiogram 3.x, FSM (Finite State Machine)
+* **Web App (Mini App)**: HTML5, CSS3, JavaScript (встроен в Telegram)
+* **Parser**: Playwright, Playwright Stealth, Selenium, BeautifulSoup4
+* **Machine Learning**: XGBoost, Scikit-learn, Pandas, NumPy, Optuna (для автоподбора гиперпараметров)
+* **Database**: SQLAlchemy (asyncio), aiosqlite, Alembic
+
+---
+
+## 🚀 Быстрый запуск
+
+### 1. Подготовка окружения
+Клонируйте проект и перейдите в его директорию:
+```bash
+git clone https://github.com/MiKleTheGoat/moscow-housing-ml.git
+cd bot_mini_map_ml_moscow
+```
+
+Создайте файл `.env` на основе примера:
+```bash
+cp config/.env
+```
+Заполните переменные в `.env`:
+* `BOT_TOKEN` — токен вашего бота от [@BotFather](https://t.me/BotFather)
+* `ADMIN_ID` — ваш Telegram ID (для уведомлений о тикетах)
+* `MINI_APP_URL` — ссылка на ваш Telegram Mini App (или хост)
+
+### 2. Запуск локально (Python)
+Установите зависимости в виртуальное окружение:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Для Linux/macOS
+# или .venv\Scripts\activate для Windows
+
+pip install -r requirements.txt
+playwright install  # Установка браузеров для парсера
+```
+
+* **Запуск API-сервера:**
+  ```bash
+  uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
+  ```
+* **Запуск Telegram-бота:**
+  ```bash
+  python -m bot.main
+  ```
+
+
+
+---
+
+## 📈 ML-модель предсказания цен
+
+Модель обучается на свежих собранных данных с ЦИАН.
+* **Алгоритм**: XGBoost Regressor
+* **Оптимизация**: Optuna осуществляет поиск гиперпараметров на кросс-валидации для снижения MAE (средней абсолютной ошибки).
+* **Метрика R²**: > 0.85 в базовых тестах.
+
+Интеграция с ботом позволяет отправлять геолокацию или характеристики квартиры и мгновенно получать прогноз рыночной стоимости.
