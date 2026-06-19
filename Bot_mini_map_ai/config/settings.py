@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     ML_API_URL: str = "http://localhost:8001"
 
-    DATABASE_URL: str = "sqlite+aiosqlite:///data/moscow_parser.db"
+    DATABASE_URL: str
     CSV_PATH: str = "data/csv/house_cian.csv"
     MODEL_PATH: str = "data/model.pkl"
 
@@ -49,13 +49,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode='after')
     def resolve_paths(self) -> 'Settings':
-        if self.DATABASE_URL.startswith("sqlite+aiosqlite:///"):
-            path_part = self.DATABASE_URL.replace("sqlite+aiosqlite:///", "")
-            if not path_part.startswith("/"):
-                abs_path = (self.ROOT_DIR / path_part).resolve()
-                abs_path.parent.mkdir(parents=True, exist_ok=True)
-                self.DATABASE_URL = f"sqlite+aiosqlite:///{abs_path}"
-        
         csv_path = Path(self.CSV_PATH)
         if not csv_path.is_absolute():
             abs_csv = (self.ROOT_DIR / csv_path).resolve()

@@ -22,8 +22,7 @@ def load_model():
     except FileNotFoundError:
         logger.warning("Файл модели не найден по пути %s. Сначала обучите модель.", settings.MODEL_PATH)
         return None
-    except Exception as e:
-        logger.error("Ошибка загрузки модели: %s", e)
+    except Exception:
         return None
 
 
