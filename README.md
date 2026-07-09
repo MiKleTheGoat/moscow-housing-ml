@@ -52,8 +52,8 @@ bot_mini_map_ml_moscow/
 * **Telegram Bot**: aiogram 3.x, FSM (Finite State Machine)
 * **Web App (Mini App)**: HTML5, CSS3, JavaScript (встроен в Telegram)
 * **Parser**: Playwright, Playwright Stealth, Selenium, BeautifulSoup4
-* **Machine Learning**: XGBoost, Scikit-learn, Pandas, NumPy, Optuna (для автоподбора гиперпараметров)
-* **Database**: SQLAlchemy (asyncio), aiosqlite, Alembic
+* **Machine Learning**:  **LLM** (для работы со словами),XGBoost(для работ с числами), Scikit-learn, Pandas, NumPy, Optuna (для автоподбора гиперпараметров)
+* **Database**: SQLAlchemy (asyncio), PostgreSQl(раньше SQLite был), Alembic
 
 ---
 
