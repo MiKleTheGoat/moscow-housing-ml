@@ -6,7 +6,7 @@ from typing import List
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).resolve().parent / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
             abs_cookie = (self.ROOT_DIR / cookie_path).resolve()
             abs_cookie.parent.mkdir(parents=True, exist_ok=True)
             self.PARSER_COOKIE_FILE = str(abs_cookie)
-            
+
         return self
 
     @property

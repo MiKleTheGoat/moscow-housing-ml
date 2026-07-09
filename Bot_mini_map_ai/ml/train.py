@@ -133,10 +133,17 @@ def _log_to_mlflow(
             mlflow.log_metric("mae", mae)
             mlflow.log_metric("mse", mse)
             mlflow.log_metric("r2_score", r2)
+            
+            # Dynamically construct input_example with all features to prevent schema mismatches
+            example = {f: 0 for f in features}
+            if "area" in example: example["area"] = 50.0
+            if "floor" in example: example["floor"] = 5
+            if "time_to_metro" in example: example["time_to_metro"] = 10
+            
             mlflow.xgboost.log_model(
                 xgb_model=final_model,
                 artifact_path="xgboost_model",
-                input_example={"area": 50.0, "floor": 5, "time_to_metro": 10},
+                input_example=example,
             )
 
             run_id = mlflow.active_run().info.run_id

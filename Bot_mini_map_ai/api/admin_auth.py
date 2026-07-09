@@ -41,7 +41,7 @@ def get_or_create_totp_secret() -> str:
             "Generated a new secret for this session:\n"
             "Add it to .env as ADMIN_TOTP_SECRET=%s\n"
             "Then scan the QR code at GET /admin/setup-qr\n",
-            secret, secret,
+            secret,
         )
         settings.__dict__["ADMIN_TOTP_SECRET"] = secret
     return secret

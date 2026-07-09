@@ -7,7 +7,7 @@ import math
 import pandas as pd
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert
 
 from Bot_mini_map_ai.config.settings import settings
 from Bot_mini_map_ai.parser.resumer import ParseResumer
@@ -217,14 +217,14 @@ class PlaywrightParser:
         try:
             async with AsyncSession() as session:
                 for data in self.results:
-                    stmt = sqlite_insert(Offer).values(**data)
+                    stmt = insert(Offer).values(**data)
                     stmt = stmt.on_conflict_do_update(
                         index_elements=[Offer.url],
                         set_={k: v for k, v in data.items() if k != 'url'}
                     )
                     await session.execute(stmt)
                 await session.commit()
-            logger.info(f"Успешно синхронизировано {len(self.results)} объявлений с базой данных SQLite")
+            logger.info(f"Успешно синхронизировано {len(self.results)} объявлений с базой данных PostgreSQL: {settings.DATABASE_URL}")
         except Exception as e:
             logger.error(f"Ошибка синхронизации с базой данных: {e}")
 

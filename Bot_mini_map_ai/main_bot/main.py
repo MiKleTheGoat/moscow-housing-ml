@@ -10,15 +10,12 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from Bot_mini_map_ai.config.settings import settings
 from Bot_mini_map_ai.main_bot.handlers import start, location, parse
 from Bot_mini_map_ai.main_bot.handlers import ticket, train, predict
+from Bot_mini_map_ai.storage.db import init_db
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-
-
-from Bot_mini_map_ai.storage.db import init_db
-
 
 async def set_commands(bot: Bot):
     commands = [
@@ -29,6 +26,7 @@ async def set_commands(bot: Bot):
         BotCommand(command="predict", description="Предсказать цену квартиры"),
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+
 
 
 async def main() -> None:

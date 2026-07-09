@@ -19,7 +19,6 @@ tabs.forEach(tab => {
     document.getElementById(tab.dataset.tab).classList.add('active');
 
     if (tab.dataset.tab === 'map-tab' && map) {
-      // Leaflet needs layout to settle before recalculating size
       requestAnimationFrame(() => setTimeout(() => map.invalidateSize(), 80));
     }
   });
