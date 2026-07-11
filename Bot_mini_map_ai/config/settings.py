@@ -1,7 +1,9 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, model_validator
 from pathlib import Path
-from typing import List
+from typing import List, Any
+from urllib.parse import urlparse
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -43,6 +45,33 @@ class Settings(BaseSettings):
     ADMIN_TOTP_SECRET: str
     ADMIN_JWT_TTL_MINUTES: int = 1000
     ADMIN_IP_WHITELIST: str
+
+     # ── Url Parser Proxy  ────────────────────────────────────────────────────────────────
+    URL_PARSER_PROXY: str = ""
+    PARSER_PROXY_POOL: str = ""
+
+
+    @staticmethod
+    def _to_pw_proxy(raw: str) -> str:
+        url = urlparse(raw)
+        proxy = {"server": f"{url.scheme}://{url.netloc}:{url.port}"}
+        if url.username:
+            proxy["username"] = url.username
+        if url.password:
+            proxy["password"] = url.password
+        return proxy
+
+    @property
+    def playwright_url(self) -> dict | None:
+        return self._to_pw_proxy(self.URL_PARSER_PROXY) if self.URL_PARSER_PROXY else None
+
+    @property
+    def proxy_pool(self) -> list[dict] | list[Any]:
+        if not self.PARSER_PROXY_POOL:
+            return []
+        return [self._to_pw_proxy(p.strip())
+                for p in self.PARSER_PROXY_POOL.split(",") if p.strip()]
+
 
     # --- Paths ---
     ROOT_DIR: Path = Path(__file__).resolve().parent.parent.parent

@@ -3,6 +3,8 @@ import asyncio
 
 from Bot_mini_map_ai.celery_app import app
 from Bot_mini_map_ai.config.settings import settings
+from Bot_mini_map_ai.parser.playwright import PlaywrightParser
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,6 @@ def run_parse_task(self, max_pages: int = None, start_page: int = None) -> dict:
     max_pages = max_pages or settings.PARSER_MAX_PAGES
     logger.info("▶ parse | max_pages=%d | start_page=%s | task_id=%s", max_pages, start_page, self.request.id)
     try:
-        from Bot_mini_map_ai.parser.playwright import PlaywrightParser
         parser = PlaywrightParser(
             headless=settings.PARSER_HEADLESS,
             max_concurrent=settings.PARSER_MAX_CONCURRENT,

@@ -3,10 +3,10 @@ import json
 import logging
 import os
 import re
-import math
 import pandas as pd
+import random
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth
+from playwright_stealth import Stealth
 from sqlalchemy.dialects.postgresql import insert
 
 from Bot_mini_map_ai.config.settings import settings
@@ -43,7 +43,7 @@ class PlaywrightParser:
         "Connection": "keep-alive",
     }
 
-    def __init__(self, headless: bool = True, max_concurrent: int = 5):
+    def __init__(self, headless: bool = True, max_concurrent: int = 2):
         self.headless = headless
         self.max_concurrent = max_concurrent
         self.resumer = ParseResumer()
@@ -249,8 +249,7 @@ class PlaywrightParser:
             await self._load_cookies(context)
 
             page = await context.new_page()
-            await stealth(page)
-            request_ctx = context.request
+            await Stealth().apply_stealth_async(page)
 
             all_links = []
             for p in range(start_page, max_pages + start_page):
@@ -265,44 +264,45 @@ class PlaywrightParser:
                     logger.info(f"Страница {p}: извлечено {len(page_links)} ссылок")
                     
                     self.resumer.update(page=p, offers=self.resumer.offers_collected + len(page_links))
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(random.uniform(3, 6))
                 else:
                     logger.warning(f"Страница {p} не вернула контент. Возможно, блок.")
                     break
 
-            unique_links = list(set(all_links))
-            logger.info(f"Всего уникальных ссылок для детального сбора: {len(unique_links)}")
+            already_parsed = self.resumer.get_parsed_urls()
+            unique_links = [url for url in set(all_links) if url not in already_parsed]
+            logger.info(
+                f"Новых ссылок {len(unique_links)} (собрано ранее: {len(already_parsed)})"
+            )
 
             if not unique_links:
                 await self._save_cookies(context)
                 await browser.close()
                 return
 
-            sem = asyncio.Semaphore(self.max_concurrent)
+            newly_used_links = []
 
-            async def fetch_and_parse(url):
-                async with sem:
-                    # Случайная пауза перед запросом
-                    await asyncio.sleep(math.sin(hash(url)) * 2 + 3)
-                    html = await self._api_fetch(request_ctx, url)
-                    if html:
-                        json_data = self._extract_from_offer_page(html)
-                        if json_data:
-                            offer_dict = json_data.get('offerData', {}).get('offer') or json_data.get('offer')
-                            if offer_dict:
-                                self._parse_offer(offer_dict, url)
+            for url in unique_links:
+                await asyncio.sleep(random.uniform(2, 6))
+                html = await self._page_fetch(page, url)
+                if html:
+                    json_data = self._extract_from_offer_page(html)
+                    if json_data:
+                        offer_dict = json_data.get("offerData", {}).get("offer") or json_data.get("offer")
+                        if offer_dict:
+                            self._parse_offer(offer_dict, url)
+                            newly_used_links.append(url)
 
-            tasks = [fetch_and_parse(url) for url in unique_links]
-            await asyncio.gather(*tasks)
-
-            logger.info(f"Парсинг завершен. Собрано предложений: {len(self.results)}")
-            
+            all_parsed = list(already_parsed | set(newly_used_links))
+            self.resumer.update(page=self.resumer.last_page, offers=len(all_parsed), urls=all_parsed)
+            logger.info(
+                f"Парсинг завершен. Новых {len(newly_used_links)}, всего в истории: {len(all_parsed)}"
+            )
             # Сохранение результатов
             self.save_to_csv()
             await self.save_to_db()
 
             await self._save_cookies(context)
             await browser.close()
-            
-        self.resumer.clear()
-        logger.info("Сессия парсинга завершена успешно!")
+
+            logger.info("Сессия парсинга завершена успешно!")
